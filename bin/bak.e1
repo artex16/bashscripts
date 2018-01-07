@@ -1,0 +1,67 @@
+#!/bin/bash
+
+# this will create a quick encrypted backup file ready to upload to untrusted
+# storage service or send over untrusted network
+# to use, set BAKE1_RECIPIENT to the GPG key that is in your key repository
+# obviously, if it is for backing up purpose, you need to use the key that
+# you own (i.e. you have private key), orherwise you will not be able to
+# decrypt the backup file
+#
+# to decrypt run: gpg --decrypt --output outputfile input_backup_file
+
+# ver 0.0 - initial
+
+set -e
+
+if [ $# -lt 2 ]; then
+	echo "usage:"
+	echo "	$0 out_file_base_name in_file0 [in_file1 [...]]"
+	exit 1
+fi
+
+if [ "$BAKE1_RECIPIENT" = "" ]; then
+	echo "BAKE1_RECIPIENT env variable is not set - set it to a name of GPG key you own"
+	exit 1
+fi
+
+TIMESTAMP=`date -u +"%Y%m%d.%H%M%S"`
+DIR="$HOME/tmp/bak-e1"
+mkdir -p "$DIR"
+OUT="$DIR/$1.$TIMESTAMP.tar.gz.e1"
+
+if [ -a "$1" ]; then
+	echo "file $1 exists"
+	exit 1
+fi
+
+if [ -a "$OUT" ]; then
+	echo "file $OUT exists"
+	exit 1
+fi
+
+for d in ${@:2}; do
+	if [ -a "$d" ]; then
+		echo "IN: $d"
+	else
+		echo "ERR: input file $d does not exist"
+		exit 1
+	fi
+done
+
+echo "OUT: $OUT"
+
+tar -cz ${@:2} | gpg --encrypt --hidden-recipient "$BAKE1_RECIPIENT" --output "$OUT"
+
+if ! [ -a "$OUT" ]; then
+	echo "output file missing after encrypting"
+	exit 1
+fi
+
+if ! (file "$OUT" | grep "PGP RSA encrypted" > /dev/null 2>&1); then
+	echo "output file seems to have wrong format:"
+	file "$OUT"
+	exit 1
+fi
+
+xdg-open "$DIR"
+

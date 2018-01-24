@@ -13,9 +13,9 @@
 
 set -e
 
-if [ $# -lt 2 ]; then
+if [ $# -lt 1 ]; then
 	echo "usage:"
-	echo "	$0 out_file_base_name in_file0 [in_file1 [...]]"
+	echo "	$0 out_file_base_name [in_file0 [in_file1 [...]]]"
 	exit 1
 fi
 
@@ -24,10 +24,32 @@ if [ "$BAKE1_RECIPIENT" = "" ]; then
 	exit 1
 fi
 
-TIMESTAMP=`date -u +"%Y%m%d.%H%M%S"`
-DIR="$HOME/tmp/bak-e1"
-mkdir -p "$DIR"
-OUT="$DIR/$1.$TIMESTAMP.tar.gz.e1"
+echo "encrypting for recipient $BAKE1_RECIPIENT"
+
+TIMESTAMP=`date -u +"%Y%m%d.%H%M%SZ"`
+
+if [[ "$1" == *"/"* ]]; then
+	DIR=`echo $1 | sed -e 's#^\(.*/\).*#\1#'`
+	echo "using custom output folder: $DIR"
+	if ! [ -d "$DIR" ]; then
+		echo "ERR: folder $DIR does not exist"
+		exit 1
+	fi
+	OUT="$1.$TIMESTAMP"
+else
+	DIR="$HOME/tmp/bak-e1"
+	mkdir -p "$DIR"
+	OUT="$DIR/$1.$TIMESTAMP"
+fi
+
+if [ $# -lt 2 ]; then
+	echo "IN: <stdin>"
+	CMD=gzip
+	OUT="$OUT.gz.e1"
+else
+	CMD="tar -cz ${@:2}"
+	OUT="$OUT.tar.gz.e1"
+fi
 
 if [ -a "$1" ]; then
 	echo "file $1 exists"
@@ -49,8 +71,7 @@ for d in ${@:2}; do
 done
 
 echo "OUT: $OUT"
-
-tar -cz ${@:2} | gpg --encrypt --hidden-recipient "$BAKE1_RECIPIENT" --output "$OUT"
+($CMD) | gpg --encrypt --hidden-recipient "$BAKE1_RECIPIENT" --output "$OUT"
 
 if ! [ -a "$OUT" ]; then
 	echo "output file missing after encrypting"
